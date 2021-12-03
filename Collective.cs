@@ -49,33 +49,36 @@ namespace mpi {
                 Console.WriteLine("Scattering from " + fromWhere);
             }
 
+            if (toScatter == null) {
+                return MPI.RecvText<List<T>>(fromWhere);
+            }
+
             List<T> myElements = new List<T>();
-            long node = fromWhere;
+            List<T> [] nodes = new List<T>[MPI.NodeCount];
 
-            long chunkSize = toScatter.Count / MPI.NodeCount;
-            Console.WriteLine(chunkSize);
 
-            for (int i = 0; i < toScatter.Count; i++) {
-                T element = toScatter[i];
-                
-                if (fromWhere == node) {
+            long node = 0;
+            foreach (T element in toScatter) {
+                Console.WriteLine("Sending " + element + " to " + node);
+
+                if (nodes[node] == null) nodes[node] = new List<T>();
+                nodes[node].Add(element);
+
+                if (node == fromWhere) {
                     myElements.Add(element);
                 }
 
-                MPI.SendMsg(node, element);
-                Console.WriteLine("Sending: " + element + " to " + node);
+                node = (node >= MPI.NodeCount - 1 ? 0 : node + 1);
+            }
 
-                if ((i + 1) % chunkSize == 0) {
-                    node = node >= MPI.NodeCount - 1 ? 0 : node + 1;
-                }
+            for (long i = 0; i < MPI.NodeCount; i++) {
+                MPI.SendMsg(i, nodes[i]);
             }
 
             for (int i = 0; i < toScatter.Count; i++) {
                 T element = toScatter[i];
-
-                if (!toScatter.Contains(element)) {
-                    toScatter.RemoveAt(i);
-                    i--;
+                if (!myElements.Contains(element)) {
+                    toScatter.RemoveAt(i--);
                 }
             }
 
