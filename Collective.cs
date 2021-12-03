@@ -21,11 +21,33 @@ namespace mpi {
         }
 
         public static List<T> Gather<T>(long toWhere, List<T> toBeGathered) {
+            long me = MPI.IAm;
             if (MPI.Debugging) {
-                Console.WriteLine("Gather");
+                Console.WriteLine("Gathering");
             }
 
-            return null;
+            if (toWhere == me) {
+                List<T> gatheredStuff = new List<T>();
+
+                for (long i = 0; i < MPI.NodeCount; i++) {
+                    if (i != me) {
+                        gatheredStuff.AddRange(MPI.RecvText<List<T>>(i));
+                    } else {
+                        gatheredStuff.AddRange(toBeGathered);
+                    }
+                }
+
+                return gatheredStuff;
+            } else {
+                MPI.SendMsg(toWhere, toBeGathered);
+
+                if (MPI.Debugging) {
+                    Console.WriteLine("Sending message as we are not the reciever");
+                }
+
+                return toBeGathered;
+            }
+
         }
 
         public static List<T> GatherAll<T>(List<T> toBeGathered) {
@@ -56,9 +78,11 @@ namespace mpi {
             List<T> myElements = new List<T>();
             List<T> [] nodes = new List<T>[MPI.NodeCount];
 
-
+            long chunkSize = toScatter.Count / MPI.NodeCount;
             long node = 0;
-            foreach (T element in toScatter) {
+            for (int j = 0; j < toScatter.Count; j++) {
+                T element = toScatter[j];
+                
                 Console.WriteLine("Sending " + element + " to " + node);
 
                 if (nodes[node] == null) nodes[node] = new List<T>();
@@ -68,7 +92,15 @@ namespace mpi {
                     myElements.Add(element);
                 }
 
-                node = (node >= MPI.NodeCount - 1 ? 0 : node + 1);
+                if (j % chunkSize == 0 && j != 0) {
+                     if (node >= MPI.NodeCount - 1) {
+                         if (MPI.Debugging) {
+                             Console.WriteLine("Balancing...");
+                         }
+                     } else {
+                         ++node;
+                     }
+                }
             }
 
             for (long i = 0; i < MPI.NodeCount; i++) {
