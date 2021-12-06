@@ -128,6 +128,11 @@ namespace mpi {
 		scattered += $"{i} ";
 	    MPI.Print(scattered);
 
+        long reduceMe = 50;
+
+        Console.WriteLine("reduceall");
+        Collective.ReduceAll<long>(ref reduceMe, Summation);
+
 	    // and now, gather the scattered flock back in--to a different
 	    // pasture! Remember that scatterable contains the data that
 	    // was scattered to this node, so when this is done, we will

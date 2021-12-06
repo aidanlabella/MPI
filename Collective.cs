@@ -1,4 +1,5 @@
 using System;
+using System.Numerics;
 using System.Collections.Generic;
 
 namespace mpi {
@@ -11,13 +12,36 @@ namespace mpi {
     public static class Collective {
 
         public static void ReduceAll<T>(ref T toBeReduced, MPI.ReduceFunc<T> f) {
-            MPI.Reduce<T>(0, ref toBeReduced, f);
+            long me = MPI.IAm;
+
+            if (MPI.Debugging) Console.WriteLine("Before Reduce: " + toBeReduced);
+            MPI.Reduce<T>(MPI.NodeCount - 1, ref toBeReduced, f);
 
             if (MPI.Debugging) {
                 Console.WriteLine("ReduceAll");
             }
 
+            if (MPI.Debugging) Console.WriteLine("After Reduce: " + toBeReduced);
+
             //Broadcast here...
+            var addrSize = BitOperations.Log2((ulong)MPI.NodeCount);
+            long mask = 1 << (addrSize-1);
+            long source = 0;
+
+            var low = me & ~mask;
+            var high = me | mask;
+            var iAmLow = me == low;
+            var fold2High = (source & mask) == 0;
+
+            
+            if ((source & mask) == 0) {
+                for (long rank = 0; rank < MPI.NodeCount; rank++) {
+                    if (me != rank) MPI.SendMsg(rank, toBeReduced);
+
+                }
+            } else {
+                toBeReduced = MPI.RecvText<T>(source);
+            }
         }
 
         public static List<T> Gather<T>(long toWhere, List<T> toBeGathered) {
@@ -55,7 +79,16 @@ namespace mpi {
                 Console.WriteLine("GatherAll");
             }
 
-            return null;
+            List<T> rVal = new List<T>();
+            for (long rank = 0; rank < MPI.NodeCount; rank++) {
+                List<T> gatheredStuff = Gather<T>(rank, toBeGathered);
+                if (rank == MPI.IAm) {
+                    rVal = gatheredStuff;
+                }
+
+            }
+
+            return rVal;
         }
 
         /**
